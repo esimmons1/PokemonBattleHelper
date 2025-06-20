@@ -41,6 +41,7 @@ def clear_cache():
     print("Cache cleared")
 
 def get_all_pokemon_names():
+    # Get list of all pokemon names from API or cache
     global POKEMON_NAMES_CACHE
     
     # Load from cache first
@@ -85,6 +86,7 @@ def find_closest_pokemon_name(input_name):
     return None
 
 def get_pokemon_data(pokemon_name_or_id):
+    # Get pokemon data from API or cache
     # Convert input to pokemon ID
     if str(pokemon_name_or_id).isdigit():
         pokemon_id = pokemon_name_or_id
@@ -116,6 +118,7 @@ def get_pokemon_data(pokemon_name_or_id):
         return None, "error"
 
 def get_type_data(type_url):
+    # Get type effectiveness data from API or cache
     # Extract type name from URL
     type_name = type_url.split('/')[-2]
     
@@ -140,6 +143,7 @@ def get_type_data(type_url):
         return None, "error"
 
 def analyze_best_attack_strategy(data, damage_multipliers):
+    # Analyze best attack strategy against pokemon
     # Get defense stats
     defense = 0
     sp_defense = 0
@@ -156,15 +160,34 @@ def analyze_best_attack_strategy(data, damage_multipliers):
     best_type = None
     best_multiplier = 0
     
+    # Track all immunities and worst types
+    immunities = []
+    worst_types = []
+    worst_multiplier = 1
+    
     for type_name, multiplier in damage_multipliers.items():
         if multiplier > best_multiplier:
             best_multiplier = multiplier
             best_type = type_name
+        
+        # Track immunities
+        if multiplier == 0:
+            immunities.append(type_name)
+        
+        # Track worst types (including immunities)
+        if multiplier <= worst_multiplier:
+            if multiplier < worst_multiplier:
+                worst_types = []
+                worst_multiplier = multiplier
+            worst_types.append(type_name)
     
     return {
         'attack_category': attack_type,
         'best_type': best_type,
         'multiplier': best_multiplier,
+        'immunities': immunities,
+        'worst_types': worst_types,
+        'worst_multiplier': worst_multiplier,
         'defense': defense,
         'sp_defense': sp_defense
     }
@@ -186,12 +209,14 @@ def search_pokemon(query):
     return results, source
 
 def display_pokemon_info(data, source):
+    # Display pokemon information and battle recommendations
     if not data:
         print("Pokemon not found")
         return
 
-    # Display basic info
-    print(f"\n--- {data['name'].upper()} --- [Source: {source.upper()}]")
+    # Display basic info with source
+    print(f"\n--- {data['name'].upper()} ---")
+    print(f"Data Source: {source.upper()}")
     print(f"ID: {data['id']}")
 
     types = [t['type']['name'] for t in data['types']]
@@ -203,6 +228,9 @@ def display_pokemon_info(data, source):
         stat_name = stat['stat']['name'].replace('-', ' ').title()
         base_stat = stat['base_stat']
         print(f"  {stat_name}: {base_stat}")
+
+    # Group type effectiveness
+    print("\n--Damage Relationships--")
 
     # Calculate type effectiveness
     damage_multipliers = {}
@@ -223,19 +251,7 @@ def display_pokemon_info(data, source):
                 type_name = damage_relation['name']
                 damage_multipliers[type_name] = 0
 
-    # Show attack recommendations
-    attack_strategy = analyze_best_attack_strategy(data, damage_multipliers)
-    
-    print("\nRecommended Attack Strategy:")
-    print(f"  Attack Category: {attack_strategy['attack_category']} (Defense: {attack_strategy['defense']}, Sp. Defense: {attack_strategy['sp_defense']})")
-    if attack_strategy['best_type']:
-        print(f"  Best Type: {attack_strategy['best_type'].title()} (Multiplier: {attack_strategy['multiplier']}x)")
-    else:
-        print("  No super-effective types found")
-
-    # Group type effectiveness
-    print("\nDamage Relationships:")
-    
+        
     multiplier_groups = {
         4: [],
         2: [],
@@ -259,7 +275,7 @@ def display_pokemon_info(data, source):
             multiplier_groups[0.5].append(type_name)
         else:
             multiplier_groups[1].append(type_name)
-    
+
     # Show weaknesses
     if multiplier_groups[4] or multiplier_groups[2]:
         print("\nWeaknesses:")
@@ -278,11 +294,72 @@ def display_pokemon_info(data, source):
         if multiplier_groups[0.5]:
             print(f"  1/2x: {', '.join(sorted(multiplier_groups[0.5])).title()}")
 
+# Show attack recommendations
+    attack_strategy = analyze_best_attack_strategy(data, damage_multipliers)
+    
+    print("\nRecommended Attack Strategy:")
+    print(f"  Attack Category: {attack_strategy['attack_category']} (Defense: {attack_strategy['defense']}, Sp. Defense: {attack_strategy['sp_defense']})")
+    if attack_strategy['best_type']:
+        print(f"  Best Type: {attack_strategy['best_type'].title()} (Multiplier: {attack_strategy['multiplier']}x)")
+    else:
+        print("  No super-effective types found")
+    
+    # Display immunities if any
+    if attack_strategy['immunities']:
+        print(f"  Immunities: {', '.join(t.title() for t in sorted(attack_strategy['immunities']))}")
+    
+    # Display worst types
+    if attack_strategy['worst_types']:
+        worst_types_str = ', '.join(t.title() for t in sorted(attack_strategy['worst_types']))
+        print(f"  Worst Types: {worst_types_str} (Multiplier: {attack_strategy['worst_multiplier']}x)")
+
+def load_full_cache():
+    # Preload all pokemon data into cache
+    print("Loading full Pokémon cache...")
+    pokemon_names, source = get_all_pokemon_names()
+    if not pokemon_names:
+        print("Failed to load Pokémon names")
+        return False
+    
+    total_pokemon = len(pokemon_names)
+    print(f"Found {total_pokemon} Pokémon to cache")
+    
+    # Load cache data
+    cache_data = load_cache(POKEMON_DATA_CACHE_FILE) or {}
+    
+    # Track progress
+    loaded = 0
+    failed = 0
+    
+    for name in pokemon_names:
+        try:
+            data, source = get_pokemon_data(name)
+            if data:
+                cache_data[name] = data
+                loaded += 1
+                if loaded % 10 == 0:  # Show progress every 10 Pokémon
+                    print(f"Progress: {loaded}/{total_pokemon} Pokémon cached")
+            else:
+                failed += 1
+        except:
+            failed += 1
+    
+    # Save the updated cache
+    save_cache(POKEMON_DATA_CACHE_FILE, cache_data)
+    
+    print(f"\nCache loading complete!")
+    print(f"Successfully cached: {loaded} Pokémon")
+    if failed > 0:
+        print(f"Failed to cache: {failed} Pokémon")
+    return True
+
 def main():
+    # Main program loop
     print("Pokédex - Offline Capable")
     print("Cache directory:", CACHE_DIR)
     print("\nCommands:")
     print("  search <query> - Search for Pokémon by name or type")
+    print("  load          - Preload the cache with all Pokémon data")
     print("  clear         - Clear the cache")
     print("  quit          - Exit the program")
     
@@ -302,6 +379,11 @@ def main():
             # Check for clear command
             if pokemon_input.lower() == 'clear':
                 clear_cache()
+                continue
+                
+            # Check for load command
+            if pokemon_input.lower() == 'load':
+                load_full_cache()
                 continue
                 
             # Check for search command
