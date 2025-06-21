@@ -7,7 +7,7 @@ Languages: Python (requests, fuzzywuzzy, JSON, and file I/O)
 What is this?
 -------------
 This is a command-line Pokédex app that lets you look up any Pokémon, even offline.  
-It caches Pokémon data locally and gives you battle recommendations based on types and stats.
+It caches Pokémon data locally and gives you battle recommendations based on types and stats. **Warning: Takes a long time**  
 Although the cache does work offline it takes a while to upload everything. Will remove once fully updated
 
 What it does:
