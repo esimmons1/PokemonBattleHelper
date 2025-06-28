@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokédex Debug</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Pokédex Debug</h1>
+            <p>Testing the search functionality</p>
+        </header>
+
+        <div class="controls">
+            <div class="search-section">
+                <input type="text" id="pokemonSearch" placeholder="Enter Pokémon name or ID..." autocomplete="off">
+                <button id="searchBtn">Search</button>
+                <button id="randomBtn">Random</button>
+            </div>
+        </div>
+
+        <div class="results-container">
+            <div id="loading" class="loading hidden">
+                <div class="spinner"></div>
+                <p>Loading Pokémon data...</p>
+            </div>
+            
+            <div id="error" class="error hidden">
+                <p>Pokémon not found. Please try a different name or ID.</p>
+            </div>
+
+            <div id="pokemonInfo" class="pokemon-info hidden">
+                <div class="pokemon-header">
+                    <div class="pokemon-image">
+                        <img id="pokemonSprite" src="" alt="Pokémon sprite">
+                    </div>
+                    <div class="pokemon-basic">
+                        <h2 id="pokemonName"></h2>
+                        <p id="pokemonId"></p>
+                        <div id="pokemonTypes" class="types"></div>
+                    </div>
+                </div>
+
+                <div class="pokemon-details">
+                    <div class="stats-section">
+                        <h3>Base Stats</h3>
+                        <div id="pokemonStats" class="stats-grid"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="debug-info" style="border: 1px solid #00ff00; padding: 15px; margin-top: 20px;">
+            <h3>Debug Information</h3>
+            <div id="debugOutput"></div>
+        </div>
+    </div>
+
+    <script>
+        // Simple debug version
+        console.log('Debug script loaded');
+        
+        const debugOutput = document.getElementById('debugOutput');
+        
+        function log(message) {
+            console.log(message);
+            debugOutput.innerHTML += `<p>${new Date().toLocaleTimeString()}: ${message}</p>`;
+        }
+        
+        log('Page loaded');
+        
+        // Test API connection
+        async function testAPI() {
+            log('Testing API connection...');
+            try {
+                const response = await fetch('https://pokeapi.co/api/v2/pokemon/pikachu');
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`✅ API working! Found ${data.name} (ID: ${data.id})`);
+                    return true;
+                } else {
+                    log(`❌ API error: ${response.status}`);
+                    return false;
+                }
+            } catch (error) {
+                log(`❌ API error: ${error.message}`);
+                return false;
+            }
+        }
+        
+        // Simple search function
+        async function searchPokemon() {
+            const searchInput = document.getElementById('pokemonSearch');
+            const query = searchInput.value.trim();
+            
+            log(`Searching for: ${query}`);
+            
+            if (!query) {
+                log('No query entered');
+                return;
+            }
+            
+            // Show loading
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('error').classList.add('hidden');
+            document.getElementById('pokemonInfo').classList.add('hidden');
+            
+            try {
+                const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${query.toLowerCase()}`);
+                log(`API response status: ${response.status}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`Found Pokémon: ${data.name}`);
+                    displayPokemon(data);
+                } else {
+                    log(`Pokémon not found: ${query}`);
+                    document.getElementById('loading').classList.add('hidden');
+                    document.getElementById('error').classList.remove('hidden');
+                }
+            } catch (error) {
+                log(`Error: ${error.message}`);
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('error').classList.remove('hidden');
+            }
+        }
+        
+        function displayPokemon(data) {
+            log(`Displaying ${data.name}`);
+            
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('error').classList.add('hidden');
+            document.getElementById('pokemonInfo').classList.remove('hidden');
+            
+            // Basic info
+            document.getElementById('pokemonName').textContent = data.name.charAt(0).toUpperCase() + data.name.slice(1);
+            document.getElementById('pokemonId').textContent = `#${data.id.toString().padStart(3, '0')}`;
+            document.getElementById('pokemonSprite').src = data.sprites.front_default;
+            
+            // Types
+            const typesContainer = document.getElementById('pokemonTypes');
+            typesContainer.innerHTML = '';
+            data.types.forEach(type => {
+                const typeBadge = document.createElement('div');
+                typeBadge.className = 'type-badge';
+                typeBadge.textContent = type.type.name;
+                typesContainer.appendChild(typeBadge);
+            });
+            
+            // Stats
+            const statsContainer = document.getElementById('pokemonStats');
+            statsContainer.innerHTML = '';
+            data.stats.forEach(stat => {
+                const statItem = document.createElement('div');
+                statItem.className = 'stat-item';
+                statItem.innerHTML = `
+                    <span class="stat-name">${stat.stat.name.replace('-', ' ').toUpperCase()}</span>
+                    <span class="stat-value">${stat.base_stat}</span>
+                `;
+                statsContainer.appendChild(statItem);
+            });
+            
+            log('Pokémon displayed successfully');
+        }
+        
+        // Set up event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            log('DOM loaded, setting up event listeners');
+            
+            document.getElementById('searchBtn').addEventListener('click', searchPokemon);
+            document.getElementById('randomBtn').addEventListener('click', () => {
+                const randomId = Math.floor(Math.random() * 1008) + 1;
+                document.getElementById('pokemonSearch').value = randomId.toString();
+                searchPokemon();
+            });
+            
+            document.getElementById('pokemonSearch').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    searchPokemon();
+                }
+            });
+            
+            // Test API on load
+            testAPI();
+        });
+    </script>
+</body>
+</html> 
