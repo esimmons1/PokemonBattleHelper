@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokédex Test</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #000;
+            color: #00ff00;
+            padding: 20px;
+        }
+        .test-section {
+            border: 1px solid #00ff00;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        button {
+            background-color: #000;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #00ff00;
+            color: #000;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #00ff00;
+        }
+    </style>
+</head>
+<body>
+    <h1>Pokédex API Test</h1>
+    
+    <div class="test-section">
+        <h3>Test API Connection</h3>
+        <button onclick="testAPI()">Test PokéAPI</button>
+        <button onclick="testPokemon('pikachu')">Test Pikachu</button>
+        <button onclick="testPokemon('25')">Test ID 25</button>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        async function testAPI() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing API connection...';
+            
+            try {
+                const response = await fetch('https://pokeapi.co/api/v2/pokemon?limit=1');
+                const data = await response.json();
+                resultDiv.innerHTML = `✅ API working! Found ${data.count} Pokémon total.`;
+            } catch (error) {
+                resultDiv.innerHTML = `❌ API error: ${error.message}`;
+            }
+        }
+
+        async function testPokemon(identifier) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = `Testing Pokémon: ${identifier}...`;
+            
+            try {
+                const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${identifier.toLowerCase()}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `✅ Found ${data.name} (ID: ${data.id}) - Types: ${data.types.map(t => t.type.name).join(', ')}`;
+                } else {
+                    resultDiv.innerHTML = `❌ Pokémon not found: ${identifier}`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `❌ Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html> 

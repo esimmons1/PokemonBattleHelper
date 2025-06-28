@@ -2,14 +2,20 @@ import requests
 from fuzzywuzzy import process
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import asyncio
+import aiohttp
 
 # Cache setup
 CACHE_DIR = "pokemon_cache"
 POKEMON_NAMES_CACHE_FILE = os.path.join(CACHE_DIR, "pokemon_names.json")
 POKEMON_DATA_CACHE_FILE = os.path.join(CACHE_DIR, "pokemon_data.json")
+POKEMON_TYPES_CACHE_FILE = os.path.join(CACHE_DIR, "pokemon_types.json")
 
 # Store pokemon names to avoid repeated API calls
 POKEMON_NAMES_CACHE = None
+POKEMON_DATA_CACHE = None
+POKEMON_TYPES_CACHE = None
 
 def ensure_cache_dir():
     # Create cache directory if missing
@@ -38,10 +44,11 @@ def clear_cache():
         os.remove(POKEMON_NAMES_CACHE_FILE)
     if os.path.exists(POKEMON_DATA_CACHE_FILE):
         os.remove(POKEMON_DATA_CACHE_FILE)
+    if os.path.exists(POKEMON_TYPES_CACHE_FILE):
+        os.remove(POKEMON_TYPES_CACHE_FILE)
     print("Cache cleared")
 
 def get_all_pokemon_names():
-    # Get list of all pokemon names from API or cache
     global POKEMON_NAMES_CACHE
     
     # Load from cache first
@@ -85,65 +92,114 @@ def find_closest_pokemon_name(input_name):
         return result[0]
     return None
 
+def load_all_type_data():
+    global POKEMON_TYPES_CACHE
+    POKEMON_TYPES_CACHE = load_cache(POKEMON_TYPES_CACHE_FILE) or {}
+    type_names = [
+        "normal", "fire", "water", "electric", "grass", "ice", "fighting", "poison",
+        "ground", "flying", "psychic", "bug", "rock", "ghost", "dragon", "dark", "steel", "fairy"
+    ]
+    missing_types = [t for t in type_names if t not in POKEMON_TYPES_CACHE]
+    if missing_types:
+        for type_name in missing_types:
+            try:
+                response = requests.get(f"https://pokeapi.co/api/v2/type/{type_name}")
+                if response.status_code == 200:
+                    POKEMON_TYPES_CACHE[type_name] = response.json()
+            except:
+                pass
+        save_cache(POKEMON_TYPES_CACHE_FILE, POKEMON_TYPES_CACHE)
+
+def load_all_pokemon_data():
+    global POKEMON_DATA_CACHE
+    POKEMON_DATA_CACHE = load_cache(POKEMON_DATA_CACHE_FILE) or {}
+
+def save_all_pokemon_data():
+    global POKEMON_DATA_CACHE
+    save_cache(POKEMON_DATA_CACHE_FILE, POKEMON_DATA_CACHE)
+
 def get_pokemon_data(pokemon_name_or_id):
-    # Get pokemon data from API or cache
+    global POKEMON_DATA_CACHE
     # Convert input to pokemon ID
     if str(pokemon_name_or_id).isdigit():
         pokemon_id = pokemon_name_or_id
     else:
-        closest_name = find_closest_pokemon_name(pokemon_name_or_id)
-        if closest_name:
-            pokemon_id = closest_name
+        # Handle special forms
+        if pokemon_name_or_id.lower().startswith('mega '):
+            base_name = pokemon_name_or_id[5:].lower()
+            closest_name = find_closest_pokemon_name(base_name)
+            if closest_name:
+                pokemon_id = f"mega-{closest_name}"
+            else:
+                pokemon_id = pokemon_name_or_id
+        elif pokemon_name_or_id.lower().startswith('gigantamax ') or pokemon_name_or_id.lower().startswith('gmax '):
+            base_name = pokemon_name_or_id.lower().replace('gigantamax ', '').replace('gmax ', '')
+            closest_name = find_closest_pokemon_name(base_name)
+            if closest_name:
+                pokemon_id = f"gigantamax-{closest_name}"
+            else:
+                pokemon_id = pokemon_name_or_id
+        elif any(pokemon_name_or_id.lower().startswith(prefix) for prefix in ['alolan ', 'galarian ', 'hisuian ', 'paldean ']):
+            if pokemon_name_or_id.lower().startswith('alolan '):
+                base_name = pokemon_name_or_id[7:].lower()
+                variant = 'alola'
+            elif pokemon_name_or_id.lower().startswith('galarian '):
+                base_name = pokemon_name_or_id[9:].lower()
+                variant = 'galar'
+            elif pokemon_name_or_id.lower().startswith('hisuian '):
+                base_name = pokemon_name_or_id[8:].lower()
+                variant = 'hisui'
+            elif pokemon_name_or_id.lower().startswith('paldean '):
+                base_name = pokemon_name_or_id[8:].lower()
+                variant = 'paldea'
+            
+            closest_name = find_closest_pokemon_name(base_name)
+            if closest_name:
+                pokemon_id = f"{closest_name}-{variant}"
+            else:
+                pokemon_id = pokemon_name_or_id
         else:
-            pokemon_id = pokemon_name_or_id
+            closest_name = find_closest_pokemon_name(pokemon_name_or_id)
+            if closest_name:
+                pokemon_id = closest_name
+            else:
+                pokemon_id = pokemon_name_or_id
 
-    # Check cache first
-    cache_data = load_cache(POKEMON_DATA_CACHE_FILE)
-    if cache_data and str(pokemon_id).lower() in cache_data:
-        return cache_data[str(pokemon_id).lower()], "cache"
+    # Check cache first (in-memory)
+    if POKEMON_DATA_CACHE and str(pokemon_id).lower() in POKEMON_DATA_CACHE:
+        return POKEMON_DATA_CACHE[str(pokemon_id).lower()], "cache"
 
     # Fetch from API if not in cache
     try:
         response = requests.get(f"https://pokeapi.co/api/v2/pokemon/{pokemon_id.lower()}")
         data = response.json()
-        
-        # Save to cache
-        if cache_data is None:
-            cache_data = {}
-        cache_data[str(pokemon_id).lower()] = data
-        save_cache(POKEMON_DATA_CACHE_FILE, cache_data)
-        
+        # Save to in-memory cache
+        if POKEMON_DATA_CACHE is None:
+            POKEMON_DATA_CACHE = {}
+        POKEMON_DATA_CACHE[str(pokemon_id).lower()] = data
         return data, "api"
     except:
         return None, "error"
 
 def get_type_data(type_url):
-    # Get type effectiveness data from API or cache
-    # Extract type name from URL
+    global POKEMON_TYPES_CACHE
     type_name = type_url.split('/')[-2]
-    
-    # Check cache first
-    cache_data = load_cache(POKEMON_DATA_CACHE_FILE)
-    if cache_data and f"type_{type_name}" in cache_data:
-        return cache_data[f"type_{type_name}"], "cache"
-
+    if POKEMON_TYPES_CACHE and type_name in POKEMON_TYPES_CACHE:
+        return POKEMON_TYPES_CACHE[type_name], "cache"
     # Fetch from API if not in cache
     try:
         response = requests.get(type_url)
         data = response.json()
-        
-        # Save to cache
-        if cache_data is None:
-            cache_data = {}
-        cache_data[f"type_{type_name}"] = data
-        save_cache(POKEMON_DATA_CACHE_FILE, cache_data)
-        
+        # Save to in-memory cache
+        if POKEMON_TYPES_CACHE is None:
+            POKEMON_TYPES_CACHE = {}
+        POKEMON_TYPES_CACHE[type_name] = data
+        save_cache(POKEMON_TYPES_CACHE_FILE, POKEMON_TYPES_CACHE)
         return data, "api"
     except:
         return None, "error"
 
 def analyze_best_attack_strategy(data, damage_multipliers):
-    # Analyze best attack strategy against pokemon
     # Get defense stats
     defense = 0
     sp_defense = 0
@@ -154,7 +210,7 @@ def analyze_best_attack_strategy(data, damage_multipliers):
             sp_defense = stat['base_stat']
     
     # Choose physical or special based on lower defense
-    attack_type = "Physical" if defense < sp_defense else "Special"
+    attack_type = "Either" if defense == sp_defense else "Physical" if defense < sp_defense else "Special"
     
     # Find type with highest damage multiplier
     best_type = None
@@ -201,15 +257,91 @@ def search_pokemon(query):
     results = []
     query = query.lower()
     
-    # Search by name only
-    for name in pokemon_names:
-        if query in name:
-            results.append(name)
+    # Handle mega searches
+    if query.startswith('mega '):
+        base_name = query[5:]  # Remove 'mega ' prefix
+        # Search for base Pokémon that can mega evolve
+        mega_capable = [
+            'venusaur', 'charizard', 'blastoise', 'alakazam', 'gengar', 
+            'kangaskhan', 'pinsir', 'gyarados', 'aerodactyl', 'mewtwo',
+            'ampharos', 'scizor', 'heracross', 'houndoom', 'tyranitar',
+            'blaziken', 'gardevoir', 'mawile', 'aggron', 'medicham',
+            'manectric', 'banette', 'absol', 'garchomp', 'lucario',
+            'abomasnow', 'beedrill', 'pidgeot', 'slowbro', 'steelix',
+            'sceptile', 'swampert', 'sableye', 'sharpedo', 'camerupt',
+            'altaria', 'glalie', 'salamence', 'metagross', 'latias',
+            'latios', 'rayquaza', 'lopunny', 'gallade', 'audino',
+            'diancie'
+        ]
+        
+        for name in mega_capable:
+            if base_name in name:
+                results.append(f"mega-{name}")
+    
+    # Handle Gigantamax searches
+    elif query.startswith('gigantamax ') or query.startswith('gmax '):
+        base_name = query.replace('gigantamax ', '').replace('gmax ', '')
+        # Search for base Pokémon that can Gigantamax
+        gmax_capable = [
+            'venusaur', 'charizard', 'blastoise', 'butterfree', 'pikachu',
+            'meowth', 'machamp', 'gengar', 'kingler', 'lapras',
+            'eevee', 'snorlax', 'garbodor', 'corviknight', 'orbeetle',
+            'drednaw', 'coalossal', 'flapple', 'appletun', 'sandaconda',
+            'toxtricity', 'centiskorch', 'hatterene', 'grimmsnarl',
+            'alcremie', 'copperajah', 'duraludon', 'urshifu', 'calyrex'
+        ]
+        
+        for name in gmax_capable:
+            if base_name in name:
+                results.append(f"gigantamax-{name}")
+    
+    # Handle regional variant searches
+    elif any(query.startswith(prefix) for prefix in ['alolan ', 'galarian ', 'hisuian ', 'paldean ']):
+        if query.startswith('alolan '):
+            base_name = query[7:]
+            variant = 'alola'
+        elif query.startswith('galarian '):
+            base_name = query[9:]
+            variant = 'galar'
+        elif query.startswith('hisuian '):
+            base_name = query[8:]
+            variant = 'hisui'
+        elif query.startswith('paldean '):
+            base_name = query[8:]
+            variant = 'paldea'
+        
+        # Search for base Pokémon that have regional variants
+        regional_variants = {
+            'alola': ['rattata', 'raticate', 'raichu', 'sandshrew', 'sandslash', 
+                     'vulpix', 'ninetales', 'diglett', 'dugtrio', 'meowth', 
+                     'persian', 'geodude', 'graveler', 'golem', 'grimer', 
+                     'muk', 'exeggutor', 'marowak', 'cubone', 'kangaskhan'],
+            'galar': ['meowth', 'persian', 'ponyta', 'rapidash', 'farfetchd', 
+                     'weezing', 'mr-mime', 'articuno', 'zapdos', 'moltres',
+                     'slowpoke', 'slowbro', 'slowking', 'corsola', 'zigzagoon',
+                     'linoone', 'darumaka', 'darmanitan', 'yamask', 'stunfisk',
+                     'basculin', 'zorua', 'zoroark', 'tornadus', 'thundurus',
+                     'landorus', 'enamorus'],
+            'hisui': ['growlithe', 'arcanine', 'voltorb', 'electrode', 'typhlosion',
+                     'qwilfish', 'sneasel', 'samurott', 'lilligant', 'basculin',
+                     'zorua', 'zoroark', 'braviary', 'sliggoo', 'goodra',
+                     'avalugg', 'decidueye'],
+            'paldea': ['tauros', 'wooper', 'mimikyu']
+        }
+        
+        if variant in regional_variants:
+            for name in regional_variants[variant]:
+                if base_name in name:
+                    results.append(f"{name}-{variant}")
+    else:
+        # Regular search
+        for name in pokemon_names:
+            if query in name:
+                results.append(name)
     
     return results, source
 
 def display_pokemon_info(data, source):
-    # Display pokemon information and battle recommendations
     if not data:
         print("Pokemon not found")
         return
@@ -314,7 +446,6 @@ def display_pokemon_info(data, source):
         print(f"  Worst Types: {worst_types_str} (Multiplier: {attack_strategy['worst_multiplier']}x)")
 
 def load_full_cache():
-    # Preload all pokemon data into cache
     print("Loading full Pokémon cache...")
     pokemon_names, source = get_all_pokemon_names()
     if not pokemon_names:
@@ -324,28 +455,45 @@ def load_full_cache():
     total_pokemon = len(pokemon_names)
     print(f"Found {total_pokemon} Pokémon to cache")
     
-    # Load cache data
-    cache_data = load_cache(POKEMON_DATA_CACHE_FILE) or {}
-    
-    # Track progress
+    # Load cache data (in-memory)
+    global POKEMON_DATA_CACHE
+    if POKEMON_DATA_CACHE is None:
+        POKEMON_DATA_CACHE = {}
     loaded = 0
     failed = 0
-    
-    for name in pokemon_names:
+
+    async def fetch_and_store(session, name):
+        url = f"https://pokeapi.co/api/v2/pokemon/{name}"
         try:
-            data, source = get_pokemon_data(name)
-            if data:
-                cache_data[name] = data
-                loaded += 1
-                if loaded % 10 == 0:  # Show progress every 10 Pokémon
-                    print(f"Progress: {loaded}/{total_pokemon} Pokémon cached")
-            else:
-                failed += 1
-        except:
-            failed += 1
+            async with session.get(url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return (name, data, True)
+                else:
+                    return (name, None, False)
+        except Exception:
+            return (name, None, False)
+
+    async def fetch_all_pokemon():
+        nonlocal loaded, failed
+        connector = aiohttp.TCPConnector(limit=32)
+        timeout = aiohttp.ClientTimeout(total=60)
+        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+            tasks = [fetch_and_store(session, name) for name in pokemon_names]
+            for i, future in enumerate(asyncio.as_completed(tasks), 1):
+                name, data, success = await future
+                if success and data:
+                    POKEMON_DATA_CACHE[name] = data
+                    loaded += 1
+                else:
+                    failed += 1
+                if i % 10 == 0:
+                    print(f"Progress: {i}/{total_pokemon} Pokémon cached")
+
+    asyncio.run(fetch_all_pokemon())
     
-    # Save the updated cache
-    save_cache(POKEMON_DATA_CACHE_FILE, cache_data)
+    # Save the updated cache once at the end
+    save_all_pokemon_data()
     
     print(f"\nCache loading complete!")
     print(f"Successfully cached: {loaded} Pokémon")
@@ -354,7 +502,6 @@ def load_full_cache():
     return True
 
 def main():
-    # Main program loop
     print("Pokédex - Offline Capable")
     print("Cache directory:", CACHE_DIR)
     print("\nCommands:")
@@ -362,6 +509,10 @@ def main():
     print("  load          - Preload the cache with all Pokémon data")
     print("  clear         - Clear the cache")
     print("  quit          - Exit the program")
+    
+    # Load caches into memory at startup
+    load_all_type_data()
+    load_all_pokemon_data()
     
     while True:
         try:

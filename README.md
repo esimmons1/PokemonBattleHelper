@@ -1,58 +1,56 @@
-Pokémon Battle Helper
-===============
+# Pokédex Website
 
-Made by: Ellis Simmons - June 2025  
-Languages: Python (requests, fuzzywuzzy, JSON, and file I/O)
+An interactive web-based Pokédex that provides real-time Pokémon lookups with detailed stats, type effectiveness analysis, and battle strategy recommendations. Features a retro terminal aesthetic with green text on black background.
 
-What is this?
--------------
-- This is a command-line Pokédex app that lets you look up any Pokémon, even offline.  
-- It caches Pokémon data locally and gives you battle recommendations based on types and stats. **Warning: Takes a long time**  
-- Although the cache does work offline it takes a while to upload everything. Will remove once fully updated
+## Features
 
-What it does:
--------------
-- Looks up any Pokémon by name or ID.
-- Suggests correct names if your input is close but not exact.
-- Shows full stat breakdown, types, and weaknesses along with reccomended attack strategy.
-- Groups damage relationships into multipliers (like 4x, 2x, immune, etc.).
-- Tells you whether to use physical or special attacks.
-- Identifies best and worst types to use against the Pokémon.
-- Lets you preload or clear the entire cache.
+- **Real-time Pokémon Search**: Search by name or ID with instant results
+- **Comprehensive Stats Display**: Shows all base stats in an easy-to-read format
+- **Type Effectiveness Analysis**: Displays weaknesses, resistances, and immunities
+- **Battle Strategy Recommendations**: Suggests optimal attack types based on defense stats
+- **Type Filtering**: Browse Pokémon by type
+- **Random Pokémon Generator**: Discover new Pokémon with the random button
+- **Responsive Design**: Works on desktop and mobile devices
+- **Caching System**: Fast loading with intelligent data caching
 
-How it works:
--------------
-- Uses the PokéAPI (https://pokeapi.co) to fetch data.      
-- Caches Pokémon data in JSON files to avoid repeated API calls. **Warning: Takes a long time**    
-- Fuzzy matches names using `fuzzywuzzy` if you mistype.    
-- Handles type effectiveness via damage relations and calculates the best attacking strategy.      
+## Live Demo
 
-Commands supported:
--------------------
-- `search <name>` – Search Pokémon by name fragment  
-- `load` – Preload the entire Pokédex cache (all ~1000 Pokémon) **Again, Takes a long time**    
-- `clear` – Clear all cache files  **Not reccomended, will need to reload for offline use again**
-- `quit` – Exit the program  
-- Entering any name or ID directly will show stats and suggestions.
+Visit the live website: [Pokédex Website](https://esimmons1.github.io/Pokedex/)
 
-How to use it:
-------------------------
-- Download the zip of the GitHub repo. 
-- Install dependencies in terminal. 
-- Navigate to the file location and run it. `python pokedex.py`   
-- Load while you have internet to use when you don't. **Loading is not necessary to run** 
+## Usage
 
-Why I made it:
---------------
-- I wanted a fast and offline-capable Pokédex tool I could run in the terminal without needing a browser.  
-- Plus it was a fun way to work with APIs, caching, CLI interfaces, and fuzzy matching logic.
+1. **Search by Name**: Enter any Pokémon name (e.g., "pikachu", "charizard")
+2. **Search by ID**: Enter the Pokédex number (e.g., "25", "150")
+3. **Type Filter**: Use the dropdown to browse Pokémon by type
+4. **Random Discovery**: Click "Random" to explore random Pokémon
+5. **Auto-complete**: Start typing to see matching Pokémon names
 
-Stuff you can tweak:
---------------------
-- You can modify the cache system to expire after time.
-- Easy to change how results are printed or logged.
-- Could be extended with evolution chains, move data, or shiny sprites.
-- Could also turn it into a Flask API or GUI app.
+## Technical Details
 
----
-As usual, if you're going to use or modify it, credit me please. Have a nice day.
+- **Frontend**: HTML5, CSS3, JavaScript (ES6+)
+- **API**: [PokéAPI](https://pokeapi.co/) for Pokémon data
+- **Styling**: Custom CSS with retro terminal theme
+- **Caching**: Browser-based caching for improved performance
+- **Responsive**: Mobile-first design approach
+
+## Installation
+
+1. Clone this repository
+2. Open `index.html` in a web browser
+3. No additional dependencies required
+
+## Browser Support
+
+- Chrome (recommended)
+- Firefox
+- Safari
+- Edge
+
+## License
+
+MIT License - feel free to use and modify as needed.
+
+## Credits
+
+- Pokémon data provided by [PokéAPI](https://pokeapi.co/)
+- Created by Ellis Simmons 
